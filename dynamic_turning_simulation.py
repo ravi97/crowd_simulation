@@ -8,13 +8,13 @@ import random
 
 """ GLOBAL VARIABLES"""
 t_int=0.05     #interval time (in seconds)
-t_total=15      #total running time (in seconds)
+t_total=3      #total running time (in seconds)
 grid_size=1  #size of grid in the heat map (in meters)
 n_ped=10   #number of pedestrians
 m_ped=1    #mass of one pedestrian
-r_p=0.3   #radius of one pedestrain
-v_desired=2 #desired speed of the pedestrian 
-border_threshold=5 #distance beyond which walls dont influence
+r_p=0.3   #radius of one pedestrain (in meters)
+v_desired=2 #desired speed of the pedestrian (in m/s)
+border_threshold=5 #distance beyond which walls dont influence (in meters)
 
 points=pd.ExcelFile("points.xlsx").parse("Sheet1")
 walls=pd.ExcelFile("walls.xlsx").parse("Sheet1")
@@ -22,7 +22,7 @@ walls=pd.ExcelFile("walls.xlsx").parse("Sheet1")
 x_dim=max(walls["X1"].max(),walls["X2"].max())
 y_dim=max(walls["Y1"].max(),walls["Y2"].max())
 
-mf=1/grid_size #multiplication factor since the number of grids in the heat map increases with decrease in grip size
+mf=1/float(grid_size) #multiplication factor since the number of grids in the heat map increases with decrease in grip size
 
 
 
@@ -56,9 +56,9 @@ class Pedestrian:
 		
 		newside=self.calc_side()
 		if self.side*newside<0:
-			self.point=1
-			self.side=newside
-
+			self.point+=1
+			self.side=self.calc_side()
+		
 		A=self.points.loc[self.point][1]-self.points.loc[self.point][3]
 		B=self.points.loc[self.point][2]-self.points.loc[self.point][0]
 		C=self.points.loc[self.point][3]*self.points.loc[self.point][0]-self.points.loc[self.point][2]*self.points.loc[self.point][1]	
@@ -83,8 +83,10 @@ class Pedestrian:
 	def init_constants(self):
 		self.t_relax=random.uniform(0.9,1.1)
 		self.rad=random.uniform(0.5,0.6)
+
 		self.a_b=random.uniform(0.4,0.5)
 		self.b_b=random.uniform(0.27,0.33)
+
 		self.a1=random.uniform(0.027,0.033)
 		self.b1=random.uniform(0.18,0.22)
 		self.a2=random.uniform(0.045,0.055)
@@ -216,10 +218,11 @@ def heat_maps(ped):
 
 	pedestrian_map=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
 	for j in xrange(n_ped): #iterates through each pedestrian
-		try:
-			pedestrian_map[int(math.floor(ped[j].y*mf))][int(math.floor(ped[j].x*mf))]-=1 #decrements if pedestrian is present in the cell
-		except IndexError: #doesnt consider the pedestrian if he has gone out of the map
-			continue
+		if ped[j].x>=0 and ped[j].x<=x_dim and ped[j].y>=0 and ped[j].y<=y_dim:
+			try:
+				pedestrian_map[int(math.floor(ped[j].y*mf))][int(math.floor(ped[j].x*mf))]-=1 #decrements if pedestrian is present in the cell
+			except IndexError: #doesnt consider the pedestrian if he has gone out of the map
+				continue
 	im1.set_data(pedestrian_map) #sets data for the heat map
 	im1.axes.figure.canvas.draw() #draws the canvas
 
@@ -323,11 +326,13 @@ if __name__=="__main__":
 	ax1=fig.add_subplot(1,2,1) #adds a subplot to the graph
 	ax1.set_title("Heat map animation") #sets title to the subplot
 	ax1.invert_yaxis()
-	#ax1.set_xlim(0,x_dim)
-	#ax1.set_ylim(0,y_dim)
+	ax1.set_xlim(0,x_dim*mf)
+	ax1.set_ylim(0,y_dim*mf)
+	ax1.get_xaxis().set_visible(False)
+	ax1.get_yaxis().set_visible(False)
 
 	for row in walls.itertuples():
-		ax1.plot([row[1],row[3]],[row[2],row[4]])
+		ax1.plot([row[1]*mf,row[3]*mf],[row[2]*mf,row[4]*mf])
 
 	ax2=fig.add_subplot(1,2,2)
 	ax2.set_title("Pedestrian locus animation")
@@ -338,7 +343,7 @@ if __name__=="__main__":
 	pedestrian_map=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
 	#This statement now creates a heat map corresponding to the pedestrian_map
 	#Here, hot varies from black to red to white. So, we want black if the pedestrian density is 5 per m2, and white if it is 0 per m2
-	im1=ax1.imshow(pedestrian_map,cmap='hot', interpolation='nearest',vmin=-5,vmax=0)
+	im1=ax1.imshow(pedestrian_map,cmap='hot', interpolation='nearest',vmin=-5/(mf*mf),vmax=0)
 	#plt.gca().invert_yaxis() #invert y axis
 	fig.show() #displays the plot
 
