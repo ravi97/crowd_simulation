@@ -8,16 +8,18 @@ import random
 
 """ GLOBAL VARIABLES"""
 t_int=0.05     #interval time (in seconds)
-t_total=3      #total running time (in seconds)
+t_ped=1        #interval between generation of each pedestrian
+t_total=20      #total running time (in seconds)
 grid_size=1  #size of grid in the heat map (in meters)
 n_ped=10   #number of pedestrians
 m_ped=1    #mass of one pedestrian
 r_p=0.3   #radius of one pedestrain (in meters)
-v_desired=2 #desired speed of the pedestrian (in m/s)
+v_desired=1.5 #desired speed of the pedestrian (in m/s)
 border_threshold=5 #distance beyond which walls dont influence (in meters)
 
 points=pd.ExcelFile("points.xlsx").parse("Sheet1")
 walls=pd.ExcelFile("walls.xlsx").parse("Sheet1")
+checkpoints=len(points.index)
 
 x_dim=max(walls["X1"].max(),walls["X2"].max())
 y_dim=max(walls["Y1"].max(),walls["Y2"].max())
@@ -49,6 +51,7 @@ class Pedestrian:
 		self.side=self.calc_side()
 		self.calc_desired_velocity()
 		self.init_constants()
+		self.end=False
 		
 
 	def calc_desired_velocity(self):
@@ -56,8 +59,11 @@ class Pedestrian:
 		
 		newside=self.calc_side()
 		if self.side*newside<0:
-			self.point+=1
-			self.side=self.calc_side()
+			if self.point<checkpoints-1:
+				self.point+=1
+				self.side=self.calc_side()
+			else:
+				self.end=True
 		
 		A=self.points.loc[self.point][1]-self.points.loc[self.point][3]
 		B=self.points.loc[self.point][2]-self.points.loc[self.point][0]
@@ -84,7 +90,7 @@ class Pedestrian:
 		self.t_relax=random.uniform(0.9,1.1)
 		self.rad=random.uniform(0.5,0.6)
 
-		self.a_b=random.uniform(0.4,0.5)
+		self.a_b=random.uniform(0.9,1.1)
 		self.b_b=random.uniform(0.27,0.33)
 
 		self.a1=random.uniform(0.027,0.033)
@@ -258,8 +264,11 @@ def generate_pedestrians(ped):
 		#the list is appended with instances of the pedestrian class initialised using a constructor 
 		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0,points))
 
+def generate_at_runtime(ped):
+	fps=int(1/t_int)
 
-def plot_locus(positionX,positionX_col,positionY,positionY_col):
+
+'''def plot_locus(positionX,positionX_col,positionY,positionY_col):
 	"""
 	This method takes the pandas dataframe containing all the pedestrian positions at all instances of time as arguement,
 	and plots the locus graph 
@@ -278,46 +287,19 @@ def plot_locus(positionX,positionX_col,positionY,positionY_col):
 	plt.xlabel("X axis") #sets x axis label
 	plt.ylabel("Y axis") #sets y axis label
 	plt.show() #displays plot
-
-
-def save_as_excel(positionX,positionY,velocityX,velocityY):
-	"""
-	This method saves the pandas dataframe into excel.
-	"""
-	writer=pd.ExcelWriter("Pedestrian_details.xlsx") #creates an excel writes
-	positionX.to_excel(writer,sheet_name="X positions") #writes the dataframe into the excel file in the given sheet
-	positionY.to_excel(writer,sheet_name="Y positions") #writes the dataframe into the excel file in the given sheet
-	velocityX.to_excel(writer,sheet_name="X velocities") #writes the dataframe into the excel file in the given sheet
-	velocityY.to_excel(writer,sheet_name="Y velocities") #writes the dataframe into the excel file in the given sheet
-	writer.save() #saves the excel file in the same diretory as this script
-
-
-
+'''
+def delete_pedestrian(ped):
+	global n_ped
+	for p in ped:
+		if p.end==True:
+			ped.remove(p)
+			n_ped-=1
 
 if __name__=="__main__":
 	ped=[]  #list of pedestrian instances
 
 	generate_pedestrians(ped) 
 	loops=int(t_total/t_int) #calculates the number of loops to be performed
-
-
-	positionX_col=[]  #column names for the pandas dataframe containing pedestrian positions
-	positionY_col=[]  #column names for the pandas dataframe containing pedestrian positions
-	velocityX_col=[]  #column names for the pandas dataframe containing pedestrian velocities
-	velocityY_col=[]  #column names for the pandas dataframe containing pedestrian velocities
- 
-
- 
-	for i in xrange(n_ped): #iterates for n_ped number of times 
-		positionX_col.append("Pedestrian "+str(i+1)+" (X)") #adds the column label for x position
-		positionY_col.append("Pedestrian "+str(i+1)+" (Y)") #adds the column label for y position
-		velocityX_col.append("Pedestrian "+str(i+1)+" (X)") #adds the column label for x velocity
-		velocityY_col.append("Pedestrian "+str(i+1)+" (Y)") #adds the column label for y velocity
-
-	positionX=pd.DataFrame(columns=positionX_col) #contructs empty dataframe with the required columns 
-	positionY=pd.DataFrame(columns=positionY_col) #contructs empty dataframe with the required columns
-	velocityX=pd.DataFrame(columns=velocityX_col) #contructs empty dataframe with the required columns
-	velocityY=pd.DataFrame(columns=velocityY_col) #contructs empty dataframe with the required columns
 
 
 	fig=plt.figure(figsize=(10,5)) #gets the figure of the plot
@@ -349,14 +331,6 @@ if __name__=="__main__":
 
 	for i in xrange (loops): #iterates through the loops
 		sfm(ped) #updates the pedestrian positions and velocity by calculating the forces 
-		ax1.set_title(str(i))
 		heat_maps(ped) #generate heat map with the current pedestrian state
 		animate(ped)
-		positionX.loc[i]=[a.x for a in ped] #adds the x position of all the pedestrians to the data frame
-		positionY.loc[i]=[a.y for a in ped] #adds the y position of all the pedestrians to the data frame
-		velocityX.loc[i]=[a.vx for a in ped] #adds the x velocity of all the pedestrians to the data frame
-		velocityY.loc[i]=[a.vy for a in ped] #adds the y velocity of all the pedestrians to the data frame
-
-	 
-	plot_locus(positionX,positionX_col,positionY,positionY_col) #Comment this if you dont want to see the locus plot
-	#save_as_excel(positionX,positionY,velocityX,velocityY)  #Comment this line if you dont want to save as excel 
+		delete_pedestrian(ped)
