@@ -265,7 +265,11 @@ def generate_pedestrians(ped):
 		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0,points))
 
 def generate_at_runtime(ped):
+	global n_ped
 	fps=int(1/t_int)
+	if i%(fps*t_ped)==0:
+		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0,points))
+		n_ped+=1
 
 
 '''def plot_locus(positionX,positionX_col,positionY,positionY_col):
@@ -334,3 +338,4 @@ if __name__=="__main__":
 		heat_maps(ped) #generate heat map with the current pedestrian state
 		animate(ped)
 		delete_pedestrian(ped)
+		generate_at_runtime(ped)
