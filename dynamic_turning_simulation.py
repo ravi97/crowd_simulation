@@ -9,9 +9,9 @@ import random
 """ GLOBAL VARIABLES"""
 t_int=0.05     #interval time (in seconds)
 t_ped=1        #interval between generation of each pedestrian
-t_total=20      #total running time (in seconds)
+t_total=10     #total running time (in seconds)
 grid_size=1  #size of grid in the heat map (in meters)
-n_ped=10   #number of pedestrians
+n_ped=2   #number of pedestrians
 m_ped=1    #mass of one pedestrian
 r_p=0.3   #radius of one pedestrain (in meters)
 v_desired=1.5 #desired speed of the pedestrian (in m/s)
@@ -35,13 +35,12 @@ class Pedestrian:
 	"""
 	
 
-	def __init__(self,x,y,vx,vy,points):
+	def __init__(self,x,y,vx,vy):
 		"""
 		This is a constructor method that creates a new instance 
 		and initialises it with the values given in the arguement
 		"""
 		
-		self.points=points
 
 		self.x=x      #x position
 		self.y=y      #y position
@@ -64,10 +63,14 @@ class Pedestrian:
 				self.side=self.calc_side()
 			else:
 				self.end=True
-		
-		A=self.points.loc[self.point][1]-self.points.loc[self.point][3]
-		B=self.points.loc[self.point][2]-self.points.loc[self.point][0]
-		C=self.points.loc[self.point][3]*self.points.loc[self.point][0]-self.points.loc[self.point][2]*self.points.loc[self.point][1]	
+		x1=points.loc[self.point][0]
+		y1=points.loc[self.point][1]
+		x2=points.loc[self.point][2]
+		y2=points.loc[self.point][3]
+
+		A=y1-y2
+		B=x2-x1
+		C=y2*x1-x2*y1	
 
 		m=self.x
 		n=self.y
@@ -76,6 +79,10 @@ class Pedestrian:
 
 		t_x= m - A*(A*m+B*n+C)/(A*A+B*B)  #coordinates of the foot of the perpendicular from the pedestrian location (m,n)	
 		t_y= n - B*(A*m+B*n+C)/(A*A+B*B)  
+
+		if (t_x-x1)*(t_x-x2)>=0 and (t_y-y1)*(t_y-y2)>=0:
+			t_x=(x1+x2)/2
+			t_y=(y1+y2)/2
 
 		u_x=(t_x-m)/dist   #x component of unit vector from the pedestrian to the desired line
 		u_y=(t_y-n)/dist   #y component of unit vector from the pedestrian to the desired line
@@ -154,7 +161,6 @@ def border_repulsion(p):
 				f_x+=p.a_b*math.exp((p.rad-dist)/p.b_b)*u_x
 				f_y+=p.a_b*math.exp((p.rad-dist)/p.b_b)*u_y
 	
-
 	return f_x,f_y				
 
 
@@ -262,13 +268,13 @@ def generate_pedestrians(ped):
 
 	for i in xrange(n_ped):
 		#the list is appended with instances of the pedestrian class initialised using a constructor 
-		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0,points))
+		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0))
 
 def generate_at_runtime(ped):
 	global n_ped
 	fps=int(1/t_int)
 	if i%(fps*t_ped)==0:
-		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0,points))
+		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0))
 		n_ped+=1
 
 
