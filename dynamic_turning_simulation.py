@@ -8,21 +8,24 @@ import random
 
 """ GLOBAL VARIABLES"""
 t_int=0.05     #interval time (in seconds)
-t_ped=1        #interval between generation of each pedestrian
+t_ped=0.5        #interval between generation of each pedestrian
 t_total=10     #total running time (in seconds)
-grid_size=1  #size of grid in the heat map (in meters)
+grid_size=0.5  #size of grid in the heat map (in meters)
 n_ped=2   #number of pedestrians
 m_ped=1    #mass of one pedestrian
 r_p=0.3   #radius of one pedestrain (in meters)
-v_desired=1.5 #desired speed of the pedestrian (in m/s)
+v_desired_max=1.4 #desired speed of the pedestrian (in m/s)
 border_threshold=5 #distance beyond which walls dont influence (in meters)
 
-points=pd.ExcelFile("points.xlsx").parse("Sheet1")
-walls=pd.ExcelFile("walls.xlsx").parse("Sheet1")
+imp_weight=4
+density_weight=1
+
+points=pd.ExcelFile("points.xlsx").parse("Sheet2")
+walls=pd.ExcelFile("walls.xlsx").parse("Sheet2")
 checkpoints=len(points.index)
 
 x_dim=max(walls["X1"].max(),walls["X2"].max())
-y_dim=max(walls["Y1"].max(),walls["Y2"].max())
+y_dim=max(walls["Y1"].max(),walls["Y2"].max()) 
 
 mf=1/float(grid_size) #multiplication factor since the number of grids in the heat map increases with decrease in grip size
 
@@ -46,15 +49,18 @@ class Pedestrian:
 		self.y=y      #y position
 		self.vx=vx    #x velocity
 		self.vy=vy    #y velocity
-		self.point=0
+
+		self.init_constants()
 		self.side=self.calc_side()
 		self.calc_desired_velocity()
-		self.init_constants()
-		self.end=False
+		
+		
 		
 
 	def calc_desired_velocity(self):
 
+		self.imp=1-(math.sqrt(self.vx**2+self.vy**2))/self.vd_net
+		self.vd_net= (1-self.imp)*self.vd_net + self.imp*v_desired_max
 		
 		newside=self.calc_side()
 		if self.side*newside<0:
@@ -87,13 +93,18 @@ class Pedestrian:
 		u_x=(t_x-m)/dist   #x component of unit vector from the pedestrian to the desired line
 		u_y=(t_y-n)/dist   #y component of unit vector from the pedestrian to the desired line
 
-		self.vdx=v_desired*u_x
-		self.vdy=v_desired*u_y
+		self.vdx=self.vd_net*u_x
+		self.vdy=self.vd_net*u_y
 
 
 
 
 	def init_constants(self):
+		self.vd_net=random.uniform(1,1.4)
+
+		self.point=0
+		self.end=False
+
 		self.t_relax=random.uniform(0.9,1.1)
 		self.rad=random.uniform(0.5,0.6)
 
@@ -112,7 +123,10 @@ class Pedestrian:
 		y2=points.loc[self.point][3]
 		return (y1-y2)*(self.x-x1)+(self.y-y1)*(x2-x1)
 
-
+'''
+Functions for determining the position and velocity of the pedestrians
+by calculating the forces acting on them 
+'''
 def driving_force(p):
 	"""
 	This method calculates and returns the driving force experienced by a single pedestrian p
@@ -125,7 +139,6 @@ def driving_force(p):
 	df_x=(p.vdx-p.vx)/p.t_relax  #force in the x direction
 	df_y=(p.vdy-p.vy)/p.t_relax  #force in the y direction
 	return df_x,df_y
-
 
 def border_repulsion(p):
 	"""
@@ -163,7 +176,6 @@ def border_repulsion(p):
 	
 	return f_x,f_y				
 
-
 def pedestrian_repulsion(ped,p):
 	"""
 	This method calculates and returns the pedestrain repulsion force experienced by a single pedestrain p
@@ -197,9 +209,8 @@ def pedestrian_repulsion(ped,p):
 			#y component of force on p due to the i th pedestrian 
 			f_y+=p.a1*math.exp((r-dist)/p.b1)*ny*(lam+(1-lam)*(1+cos)/2)+p.a2*math.exp((r-dist)/p.b2)*ny
 			
-	#print f_x,f_y
+	
 	return f_x,f_y
-
 
 def sfm(ped):
 	"""
@@ -222,22 +233,29 @@ def sfm(ped):
 		ped[i].vx+=(fx_total[i]/m_ped)*t_int  # v = u + at in the x direction
 		ped[i].vy+=(fy_total[i]/m_ped)*t_int  # v = u + at in the y direction
 
-
+'''
+Functions for plotting the data
+'''
 def heat_maps(ped):
 	"""
 	This method takes the pedestrian details ped and generates heat map going from white to dark red
 	"""
 
-	pedestrian_map=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
+	cri=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
+	density=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf)))
+	impatience=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf)))
+
+
 	for j in xrange(n_ped): #iterates through each pedestrian
 		if ped[j].x>=0 and ped[j].x<=x_dim and ped[j].y>=0 and ped[j].y<=y_dim:
 			try:
-				pedestrian_map[int(math.floor(ped[j].y*mf))][int(math.floor(ped[j].x*mf))]-=1 #decrements if pedestrian is present in the cell
+				density[int(math.floor(ped[j].y*mf))][int(math.floor(ped[j].x*mf))]-=1 #decrements if pedestrian is present in the cell
+				impatience[int(math.floor(ped[j].y*mf))][int(math.floor(ped[j].x*mf))]=-ped[j].imp
 			except IndexError: #doesnt consider the pedestrian if he has gone out of the map
 				continue
-	im1.set_data(pedestrian_map) #sets data for the heat map
+	cri=density_weight*density+imp_weight*impatience
+	im1.set_data(cri) #sets data for the heat map
 	im1.axes.figure.canvas.draw() #draws the canvas
-
 
 def animate(ped):
 	"""
@@ -256,8 +274,9 @@ def animate(ped):
 	for row in walls.itertuples():
 		ax2.plot([row[1],row[3]],[row[2],row[4]])
 
-
-
+'''
+Functions to generate and delete pedestrians
+'''
 def generate_pedestrians(ped):
 	"""
 	This function generates random pedestrians across the map.
@@ -268,42 +287,23 @@ def generate_pedestrians(ped):
 
 	for i in xrange(n_ped):
 		#the list is appended with instances of the pedestrian class initialised using a constructor 
-		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0))
+		ped.append(Pedestrian(random.uniform(4,6),random.uniform(0,2),0,0))
 
 def generate_at_runtime(ped):
 	global n_ped
 	fps=int(1/t_int)
-	if i%(fps*t_ped)==0:
-		ped.append(Pedestrian(random.uniform(0,2),random.uniform(8,10),0,0))
-		n_ped+=1
+	if i%int(fps*t_ped)==0:
+		ped.append(Pedestrian(random.uniform(4,6),random.uniform(0,2),0,0))
+		ped.append(Pedestrian(random.uniform(8,10),random.uniform(2,4),0,0))
+		n_ped+=2
 
-
-'''def plot_locus(positionX,positionX_col,positionY,positionY_col):
-	"""
-	This method takes the pandas dataframe containing all the pedestrian positions at all instances of time as arguement,
-	and plots the locus graph 
-	"""
-	plt.clf() #clears the graph before plotting
-	plt.figure(figsize=(5,5))
-	plt.suptitle("Locus graph")
-	for i in xrange(n_ped): #iterates through each pedestrian
-		x=positionX[positionX_col[i]].tolist() #take the specific column containing x positions of pedestrian i
-		y=positionY[positionY_col[i]].tolist() #and convert into list. Similarly, for y positions.
-		plt.plot(x,y) #plots the locus line of pedestrian i 
-
-	plt.suptitle("Locus of a "+str(n_ped)+" pedestrian system") #adds title to graph
-	plt.xlim([0,x_dim])  #sets x scale for the graph
-	plt.ylim([0,y_dim])  #sets y scale for the graph
-	plt.xlabel("X axis") #sets x axis label
-	plt.ylabel("Y axis") #sets y axis label
-	plt.show() #displays plot
-'''
 def delete_pedestrian(ped):
 	global n_ped
 	for p in ped:
 		if p.end==True:
 			ped.remove(p)
 			n_ped-=1
+
 
 if __name__=="__main__":
 	ped=[]  #list of pedestrian instances
@@ -332,10 +332,10 @@ if __name__=="__main__":
 		ax2.plot([row[1],row[3]],[row[2],row[4]])
 	
 
-	pedestrian_map=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
+	cri=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
 	#This statement now creates a heat map corresponding to the pedestrian_map
 	#Here, hot varies from black to red to white. So, we want black if the pedestrian density is 5 per m2, and white if it is 0 per m2
-	im1=ax1.imshow(pedestrian_map,cmap='hot', interpolation='nearest',vmin=-5/(mf*mf),vmax=0)
+	im1=ax1.imshow(cri,cmap='hot', interpolation='nearest',vmin=-9,vmax=0)
 	#plt.gca().invert_yaxis() #invert y axis
 	fig.show() #displays the plot
 
