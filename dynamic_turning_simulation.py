@@ -17,8 +17,12 @@ r_p=0.3   #radius of one pedestrain (in meters)
 v_desired_max=1.4 #desired speed of the pedestrian (in m/s)
 border_threshold=5 #distance beyond which walls dont influence (in meters)
 
-imp_weight=4
+imp_weight=10
 density_weight=1
+imp_threshold=1
+density_threshold=5
+
+max_cri=imp_threshold*imp_weight+density_threshold*density_weight
 
 points=pd.ExcelFile("points.xlsx").parse("Sheet2")
 walls=pd.ExcelFile("walls.xlsx").parse("Sheet2")
@@ -335,7 +339,7 @@ if __name__=="__main__":
 	cri=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
 	#This statement now creates a heat map corresponding to the pedestrian_map
 	#Here, hot varies from black to red to white. So, we want black if the pedestrian density is 5 per m2, and white if it is 0 per m2
-	im1=ax1.imshow(cri,cmap='hot', interpolation='nearest',vmin=-9,vmax=0)
+	im1=ax1.imshow(cri,cmap='hot', interpolation='nearest',vmin=-(max_cri),vmax=0)
 	#plt.gca().invert_yaxis() #invert y axis
 	fig.show() #displays the plot
 
