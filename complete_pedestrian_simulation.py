@@ -12,10 +12,10 @@ import random
 """ GLOBAL VARIABLES"""
 
 t_int=0.05     #interval time (in seconds)
-t_ped=0.5        #interval between generation of each pedestrian
-t_total=5     #total running time (in seconds)
+t_total=20     #total running time (in seconds)
+loops=int(t_total/t_int) #calculates the number of loops to be performed
 grid_size=0.5  #size of grid in the heat map (in meters)
-n_ped=2   #number of pedestrians
+n_ped=20   #number of pedestrians
 m_ped=1    #mass of one pedestrian
 r_p=0.3   #radius of one pedestrain (in meters)
 v_desired_max=1.4 #desired speed of the pedestrian (in m/s)
@@ -66,7 +66,7 @@ class Pedestrian:
 
 		self.init_constants() #invokes the function init_constants 
 		self.side=self.calc_side() #invokes the function calc side and assign it to the variable side
-		self.calc_desired_velocity() #invokes 
+		self.calc_desired_velocity() #invokes the function to calculate desired velocity
 		
 		
 		
@@ -118,6 +118,8 @@ class Pedestrian:
 
 		self.point=0
 		self.end=False
+		self.start=False
+		self.starting_frame=random.randint(0,loops)
 
 		self.t_relax=random.uniform(0.9,1.1)
 		self.rad=random.uniform(0.5,0.6)
@@ -150,6 +152,9 @@ def driving_force(p):
 	"""Constants"""
 	#t_relax=1  #relaxation time
 
+	if p.start==False or p.end==True:
+		return 0.0,0.0
+
 	df_x=(p.vdx-p.vx)/p.t_relax  #force in the x direction
 	df_y=(p.vdy-p.vy)/p.t_relax  #force in the y direction
 	return df_x,df_y
@@ -166,9 +171,12 @@ def border_repulsion(p):
 	f_x=0
 	f_y=0
 
+	if p.start==False or p.end==True:
+		return f_x,f_y
+
 	for row in walls.itertuples():
-		A=row[2]-row[4]              #we are finding the perpendicular distance between the wall and the pedestrian
-		B=row[3]-row[1]               #we know (x1,y1) and (x2,y2) for the line. We are converting it into Ax + By + C = 0 format
+		A=row[2]-row[4]                #we are finding the perpendicular distance between the wall and the pedestrian
+		B=row[3]-row[1]                #we know (x1,y1) and (x2,y2) for the line. We are converting it into Ax + By + C = 0 format
 		C=row[1]*row[4]-row[3]*row[2]  # A= y1 - y2 , B = x2 - x1 , C = x1*y2 - x2*y1
 
 		m=p.x  #pedestrian coordinates
@@ -208,25 +216,29 @@ def pedestrian_repulsion(ped,p):
 	f_x=0 # net force in the x direction
 	f_y=0 # net force in the y direction
 
+	if p.start==False or p.end==True:
+		return f_x,f_y
+
 	for i in xrange(n_ped): #iterates through all the pedestrians from the list 
 		dist=math.sqrt((ped[i].x-p.x)**2+(ped[i].y-p.y)**2) #distance of the i th pedestrian from pedestrian p 
 		
 		if dist==0: #distance is zero indicates that i th pedestrian is p 
 			continue #since the pedestrian does not exert any force on themselves
 		else:
-			nx=(p.x-ped[i].x)/dist  #x component of unit vector between the two pedestrians
-			ny=(p.y-ped[i].y)/dist  #y component of unit vector between the two pedestrians
-			cos=abs(p.x*nx+p.y*ny)  # cos of angle between the line joining two pedestrian, and the path of p
+			if ped[i].start==True:
+				nx=(p.x-ped[i].x)/dist  #x component of unit vector between the two pedestrians
+				ny=(p.y-ped[i].y)/dist  #y component of unit vector between the two pedestrians
+				cos=abs(p.x*nx+p.y*ny)  # cos of angle between the line joining two pedestrian, and the path of p
 			
-			#x component of force on p due to the i th pedestrian
-			f_x+=p.a1*math.exp((r-dist)/p.b1)*nx*(lam+(1-lam)*(1+cos)/2)+p.a2*math.exp((r-dist)/p.b2)*nx
-			#y component of force on p due to the i th pedestrian 
-			f_y+=p.a1*math.exp((r-dist)/p.b1)*ny*(lam+(1-lam)*(1+cos)/2)+p.a2*math.exp((r-dist)/p.b2)*ny
+				#x component of force on p due to the i th pedestrian
+				f_x+=p.a1*math.exp((r-dist)/p.b1)*nx*(lam+(1-lam)*(1+cos)/2)+p.a2*math.exp((r-dist)/p.b2)*nx
+				#y component of force on p due to the i th pedestrian 
+				f_y+=p.a1*math.exp((r-dist)/p.b1)*ny*(lam+(1-lam)*(1+cos)/2)+p.a2*math.exp((r-dist)/p.b2)*ny
 			
 	
 	return f_x,f_y
 
-def sfm(ped):
+def sfm(ped,frame):
 	"""
 	This is the social force model function.
 	It takes the list containing all the pedestrian instances as arguement, 
@@ -236,16 +248,23 @@ def sfm(ped):
 	fy_total=[]   #stores the forces experienced by all the pedestrians in the y direction
 	for i in xrange(n_ped):  #this loop iterates through all the pedestrians and calculates the force on the pedestrians
 		#this statement calls the three force functions, and obtains the net force of each pedestrian in the x and y directions
+		
 		ped[i].calc_desired_velocity()
 		f_total=[sum(x) for x in zip( driving_force(ped[i]) , border_repulsion(ped[i]) , pedestrian_repulsion(ped,ped[i]))]
 		fx_total.append(f_total[0])    #net force of all the pedestrians in the x direction
 		fy_total.append(f_total[1])    #net force of all the pedestrians in the y direction
 
-	for i in xrange(n_ped):    #this loop updates the position and velocity of each pedestrian using the forces obtained 
-		ped[i].x+=ped[i].vx*t_int+0.5*(fx_total[i]/m_ped)*t_int*t_int  # s = ut + 0.5 at^2 in the x direction
-		ped[i].y+=ped[i].vy*t_int+0.5*(fy_total[i]/m_ped)*t_int*t_int  # s = ut + 0.5 at^2 in the y direction
-		ped[i].vx+=(fx_total[i]/m_ped)*t_int  # v = u + at in the x direction
-		ped[i].vy+=(fy_total[i]/m_ped)*t_int  # v = u + at in the y direction
+
+	for i in xrange(n_ped):    #this loop updates the position and velocity of each pedestrian using the forces obtained
+		
+		if ped[i].start==True and ped[i].end==False: 
+			ped[i].x+=ped[i].vx*t_int+0.5*(fx_total[i]/m_ped)*t_int*t_int  # s = ut + 0.5 at^2 in the x direction
+			ped[i].y+=ped[i].vy*t_int+0.5*(fy_total[i]/m_ped)*t_int*t_int  # s = ut + 0.5 at^2 in the y direction
+			ped[i].vx+=(fx_total[i]/m_ped)*t_int  # v = u + at in the x direction
+			ped[i].vy+=(fy_total[i]/m_ped)*t_int  # v = u + at in the y direction
+		else:
+			if frame==ped[i].starting_frame:
+				ped[i].start=True
 
 '''
 Functions for plotting the data
@@ -262,12 +281,11 @@ def heat_maps(ped):
 
 	for j in xrange(n_ped): #iterates through each pedestrian
 		if ped[j].x>=0 and ped[j].x<=x_dim and ped[j].y>=0 and ped[j].y<=y_dim:
-			try:
+			if ped[j].start==True and ped[j].end==False:
 				density[int(math.floor(ped[j].y*mf))][int(math.floor(ped[j].x*mf))]-=1 #decrements if pedestrian is present in the cell
 				impatience[int(math.floor(ped[j].y*mf))][int(math.floor(ped[j].x*mf))]=-ped[j].imp
-			except IndexError: #doesnt consider the pedestrian if he has gone out of the map
-				continue
-	cri=density_weight*density+imp_weight*impatience
+
+	cri=density_weight*density + imp_weight*impatience
 	im1.set_data(cri) #sets data for the heat map
 	im1.axes.figure.canvas.draw() #draws the canvas
 
@@ -278,10 +296,13 @@ def animate(ped):
 	x=[]
 	y=[]
 	ax2.cla()
+
 	for j in range(n_ped):
-		if ped[j].x<x_dim:
-			x.append(ped[j].x)
-			y.append(ped[j].y)
+		if ped[j].start==True and ped[j].end==False:
+			if ped[j].x<x_dim:
+				x.append(ped[j].x)
+				y.append(ped[j].y)
+
 	ax2.set_xlim(0,x_dim)
 	ax2.set_ylim(0,y_dim)
 	ax2.set_title("Pedestrian locus animation")
@@ -301,27 +322,50 @@ def generate_pedestrians(ped):
 		#the list is appended with instances of the pedestrian class initialised using a constructor 
 		ped.append(Pedestrian(random.uniform(4,6),random.uniform(0,2),0,0))
 
-def generate_at_runtime(ped):
-	global n_ped
-	fps=int(1/t_int)
-	if i%int(fps*t_ped)==0:
-		ped.append(Pedestrian(random.uniform(4,6),random.uniform(0,2),0,0))
-		ped.append(Pedestrian(random.uniform(8,10),random.uniform(2,4),0,0))
-		n_ped+=2
 
-def delete_pedestrian(ped):
-	global n_ped
-	for p in ped:
-		if p.end==True:
-			ped.remove(p)
-			n_ped-=1
+def create_dataframe():
+	
+	positionX_col=[]  #column names for the pandas dataframe containing pedestrian y positions
+	positionY_col=[]  #column names for the pandas dataframe containing pedestrian x positions
+	impatience_col=[] #column names for the pandas dataframe containing pedestrian impatience indexes
+
+	for i in xrange(n_ped): #iterates for n_ped number of times 
+		positionX_col.append("Pedestrian "+str(i+1)+" (X)") #adds the column label for x position
+		positionY_col.append("Pedestrian "+str(i+1)+" (Y)") #adds the column label for y position
+		impatience_col.append("Pedestrian "+str(i+1)+" (imp)") #adds the column label for impatience
+
+	positionX=pd.DataFrame(columns=positionX_col) #contructs empty dataframe with the required columns 
+	positionY=pd.DataFrame(columns=positionY_col) #contructs empty dataframe with the required columns
+	impatience=pd.DataFrame(columns=impatience_col) #contructs empty dataframe with the required columns
+
+	return positionX,positionY,impatience
+
+def add_dataframe(positionX,positionY,impatience):
+
+	positionX.loc[i]=[a.x for a in ped] #adds the x position of all the pedestrians to the data frame
+	positionY.loc[i]=[a.y for a in ped] #adds the y position of all the pedestrians to the data frame
+	impatience.loc[i]=[a.imp for a in ped] #adds the impatience of all the pedestrians to the data frame
+
+
+def save_as_excel(positionX,positionY,impatience):
+	"""
+	This method saves the pandas dataframe into excel.
+	"""
+	writer=pd.ExcelWriter("Pedestrian_details.xlsx") #creates an excel writes
+	positionX.to_excel(writer,sheet_name="X positions") #writes the dataframe into the excel file in the given sheet
+	positionY.to_excel(writer,sheet_name="Y positions") #writes the dataframe into the excel file in the given sheet
+	impatience.to_excel(writer,sheet_name="impatience") #writes the dataframe into the excel file in the given sheet
+	writer.save() #saves the excel file in the same diretory as this script
+
+
+
 
 
 if __name__=="__main__":
 	ped=[]  #list of pedestrian instances
 
 	generate_pedestrians(ped)  #generate some pedestrians initially
-	loops=int(t_total/t_int) #calculates the number of loops to be performed
+	positionX,positionY,impatience=create_dataframe() #create dataframes in which the pedestrian data at each instance is stored
 
 
 	fig=plt.figure(figsize=(10,5)) #sets the size of the figure of the plot
@@ -329,7 +373,7 @@ if __name__=="__main__":
 
 	ax1=fig.add_subplot(1,2,1) #we create a 1 x 2 subplot and assigning ax1 to the first subplot
 	ax1.set_title("Heat map animation") #sets title to the subplot
-	ax1.invert_yaxis() 
+	ax1.invert_yaxis()  #inverts the y axis
 	ax1.set_xlim(0,x_dim*mf) #set the x scale of the heat map (first subplot)
 	ax1.set_ylim(0,y_dim*mf) #set the y scale of the heat map (first subplot)
 	ax1.get_xaxis().set_visible(False) #removes the scale display of the heat map
@@ -346,14 +390,14 @@ if __name__=="__main__":
 
 	cri=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
 	#This statement now creates a heat map corresponding to the pedestrian_map
-	#Here, hot varies from black to red to white. So, we want black if the pedestrian density is 5 per m2, and white if it is 0 per m2
-	im1=ax1.imshow(cri,cmap='hot', interpolation='nearest',vmin=-(max_cri),vmax=0)
-	#plt.gca().invert_yaxis() #invert y axis
+	#Here, hot varies from black to red to white. So, we want black if the pedestrian cri is max and white if it is minimum
+	im1=ax1.imshow(cri,cmap='hot', interpolation='nearest',vmin=-(max_cri),vmax=0) #we are using negativee value for cri since maximum is white and minimum is black when cmap is set to hot
 	fig.show() #displays the plot
 
 	for i in xrange (loops): #iterates through the loops
-		sfm(ped) #updates the pedestrian positions and velocity by calculating the forces 
+		sfm(ped,i) #updates the pedestrian positions and velocity by calculating the forces 
 		heat_maps(ped) #generate heat map with the current pedestrian state
 		animate(ped)
-		delete_pedestrian(ped)
-		generate_at_runtime(ped)
+		add_dataframe(positionX,positionY,impatience)
+		
+	save_as_excel(positionX,positionY,impatience)
