@@ -14,8 +14,8 @@ import random
 t_int=0.05     #interval time (in seconds)
 t_total=20     #total running time (in seconds)
 loops=int(t_total/t_int) #calculates the number of loops to be performed
-grid_size=0.5  #size of grid in the heat map (in meters)
-n_ped=20   #number of pedestrians
+grid_size=1  #size of grid in the heat map (in meters)
+n_ped=200   #number of pedestrians
 m_ped=1    #mass of one pedestrian
 r_p=0.3   #radius of one pedestrain (in meters)
 v_desired_max=1.4 #desired speed of the pedestrian (in m/s)
@@ -31,9 +31,9 @@ density_threshold=5
 
 max_cri=imp_threshold*imp_weight+density_threshold*density_weight #The maximum value the CRI can have without danger
 
-points=pd.ExcelFile("points.xlsx").parse("Sheet2") #a dataframe loaded from the excel file containing the points 
-walls=pd.ExcelFile("walls.xlsx").parse("Sheet2")  #a dataframe loaded from the excel file containing the coordinates of the wall
-checkpoints=len(points.index)   #number of points the pedestrian have to cross
+points=pd.ExcelFile("points.xlsx") #a dataframe loaded from the excel file containing the points 
+walls=pd.ExcelFile("walls.xlsx").parse("Map1")  #a dataframe loaded from the excel file containing the coordinates of the wall
+rooms=4 #number of rooms in the map
 
 #Here, the arena is a rectangle of dimension (0,x_dim) and (0,y_dim)
 #So, x_dim and y_dim are taken as the largest coordinate of the wall
@@ -52,24 +52,47 @@ class Pedestrian:
 	"""
 	
 
-	def __init__(self,x,y,vx,vy):
+	def __init__(self):
 		"""
 		This is a constructor method.
 		It is called when a new object is created
 		"""
-		
-
-		self.x=x      #x position
-		self.y=y      #y position
-		self.vx=vx    #x velocity
-		self.vy=vy    #y velocity
+		self.set_path()
+		self.vx=0    #x velocity
+		self.vy=0    #y velocity
 
 		self.init_constants() #invokes the function init_constants 
 		self.side=self.calc_side() #invokes the function calc side and assign it to the variable side
 		self.calc_desired_velocity() #invokes the function to calculate desired velocity
 		
 		
-		
+	def set_path(self):
+		room=random.randint(1,rooms)
+		if room==1:
+			self.x=random.uniform(2,12)
+			self.y=random.uniform(15,25)
+			self.path=points.parse("Path1")
+			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+
+		elif room==2:
+			self.x=random.uniform(25,35)
+			self.y=random.uniform(30,40)
+			self.path=points.parse("Path2")
+			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+
+		elif room==3:
+			self.x=random.uniform(25,35)
+			self.y=random.uniform(15,25)
+			self.path=points.parse("Path3")
+			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+
+		else:
+			self.x=random.uniform(40,50)
+			self.y=random.uniform(5,15)
+			self.path=points.parse("Path4")
+			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+
+
 
 	def calc_desired_velocity(self):
 
@@ -78,15 +101,15 @@ class Pedestrian:
 		
 		newside=self.calc_side()
 		if self.side*newside<0:
-			if self.point<checkpoints-1:
+			if self.point<self.checkpoints-1:
 				self.point+=1
 				self.side=self.calc_side()
 			else:
 				self.end=True
-		x1=points.loc[self.point][0]
-		y1=points.loc[self.point][1]
-		x2=points.loc[self.point][2]
-		y2=points.loc[self.point][3]
+		x1=self.path.loc[self.point][0]
+		y1=self.path.loc[self.point][1]
+		x2=self.path.loc[self.point][2]
+		y2=self.path.loc[self.point][3]
 
 		A=y1-y2
 		B=x2-x1
@@ -108,10 +131,7 @@ class Pedestrian:
 		u_y=(t_y-n)/dist   #y component of unit vector from the pedestrian to the desired line
 
 		self.vdx=self.vd_net*u_x
-		self.vdy=self.vd_net*u_y
-
-
-
+		self.vdy=self.vd_net*u_y		
 
 	def init_constants(self):
 		self.vd_net=random.uniform(1,1.4)
@@ -133,11 +153,15 @@ class Pedestrian:
 		self.b2=random.uniform(0.18,0.22)
 
 	def calc_side(self):
-		x1=points.loc[self.point][0]
-		x2=points.loc[self.point][2]
-		y1=points.loc[self.point][1]
-		y2=points.loc[self.point][3]
+		x1=self.path.loc[self.point][0]
+		x2=self.path.loc[self.point][2]
+		y1=self.path.loc[self.point][1]
+		y2=self.path.loc[self.point][3]
 		return (y1-y2)*(self.x-x1)+(self.y-y1)*(x2-x1)
+
+
+
+
 
 '''
 Functions for determining the position and velocity of the pedestrians
@@ -158,6 +182,7 @@ def driving_force(p):
 	df_x=(p.vdx-p.vx)/p.t_relax  #force in the x direction
 	df_y=(p.vdy-p.vy)/p.t_relax  #force in the y direction
 	return df_x,df_y
+	
 
 def border_repulsion(p):
 	"""
@@ -320,7 +345,7 @@ def generate_pedestrians(ped):
 
 	for i in xrange(n_ped):
 		#the list is appended with instances of the pedestrian class initialised using a constructor 
-		ped.append(Pedestrian(random.uniform(4,6),random.uniform(0,2),0,0))
+		ped.append(Pedestrian())
 
 
 def create_dataframe():
@@ -396,8 +421,8 @@ if __name__=="__main__":
 
 	for i in xrange (loops): #iterates through the loops
 		sfm(ped,i) #updates the pedestrian positions and velocity by calculating the forces 
-		heat_maps(ped) #generate heat map with the current pedestrian state
-		animate(ped)
+		#heat_maps(ped) #generate heat map with the current pedestrian state
+		#animate(ped)
 		add_dataframe(positionX,positionY,impatience)
 		
-	save_as_excel(positionX,positionY,impatience)
+	#save_as_excel(positionX,positionY,impatience)
