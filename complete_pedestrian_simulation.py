@@ -15,34 +15,17 @@ import random
 t_int=0.05     #interval time (in seconds)
 t_total=20     #total running time (in seconds)
 loops=int(t_total/t_int) #calculates the number of loops to be performed
-grid_size=1  #size of grid in the heat map (in meters)
+
 n_ped=50   #number of pedestrians
 m_ped=1    #mass of one pedestrian
 r_p=0.3   #radius of one pedestrain (in meters)
 v_desired_max=1.4 #desired speed of the pedestrian (in m/s)
 border_threshold=5 #distance beyond which walls dont influence (in meters)
 
-"""The weightage of various factors on the Crowd risk Index (CRI)"""
-imp_weight=2 #impatience factor
-density_weight=1 #pedestrian density project
-
-"""The threshold values of various factors influencing CRI, beyond which, it is dangerous"""
-imp_threshold=1     
-density_threshold=5
-
-max_cri=imp_threshold*imp_weight+density_threshold*density_weight #The maximum value the CRI can have without danger
 
 points=pd.ExcelFile("points.xlsx") #a dataframe loaded from the excel file containing the points 
 walls=pd.ExcelFile("walls.xlsx").parse("Map1")  #a dataframe loaded from the excel file containing the coordinates of the wall
 rooms=4 #number of rooms in the map
-
-#Here, the arena is a rectangle of dimension (0,x_dim) and (0,y_dim)
-#So, x_dim and y_dim are taken as the largest coordinate of the wall
-#in order to accomdate all the walls within the arena
-x_dim=max(walls["X1"].max(),walls["X2"].max())  
-y_dim=max(walls["Y1"].max(),walls["Y2"].max()) 
-
-mf=1/float(grid_size) #multiplication factor since the number of grids in the heat map increases with decrease in grip size
 
 
 
@@ -285,43 +268,6 @@ def sfm(ped,frame):
 				ped[i].start=True
 
 		
-		
-
-'''
-Functions for plotting the data
-'''
-def update_heat_map(i,ax1,im):
-	cri=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
-	density=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf)))
-	impatience=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf)))
-
-	ped_x=0
-	ped_y=0
-	ped_vx=0
-	ped_vy=0
-	imp=1
-
-	for j in xrange(n_ped):
-		ped_x=positionX.loc[i][j]
-		ped_y=positionY.loc[i][j]
-		ped_vx=velocityX.loc[i][j]
-		ped_vy=velocityY.loc[i][j]
-		imp=1-(math.sqrt(ped_vx**2 + ped_vy**2))/v_desired_max
-		density[int(math.floor(ped_y*mf))][int(math.floor(ped_x*mf))]-=1 #decrements if pedestrian is present in the cell
-		impatience[int(math.floor(ped_y*mf))][int(math.floor(ped_x*mf))]-=imp
-
-	cri=density_weight*density + imp_weight*impatience
-	im.set_data(cri) #sets data for the heat map
-	return im,
-
-
-def update_scatter_plot(i,ax2,scat):
-	ped_xy=[]
-	for j in xrange(n_ped):
-		if velocityX.loc[i][j]!=0 and velocityY.loc[i][j]!=0:
-			ped_xy.append([positionX.loc[i][j] , positionY.loc[i][j]])
-	scat.set_offsets(ped_xy)
-	return scat,
 
 '''
 Functions to generate and delete pedestrians
@@ -389,15 +335,6 @@ def save_as_excel(positionX,positionY,velocityX,velocityY,accelerationX,accelera
 
 	writer.save() #saves the excel file in the same diretory as this script
 
-def read_from_excel():
-	positionX=pd.ExcelFile("Pedestrian_details.xlsx").parse("X positions")
-	positionY=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y positions")
-	velocityX=pd.ExcelFile("Pedestrian_details.xlsx").parse("X velocity")
-	velocityY=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y velocity")
-	accelerationX=pd.ExcelFile("Pedestrian_details.xlsx").parse("X acceleration")
-	accelerationY=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y acceleration")
-	return positionX,positionY,velocityX,velocityY,accelerationX,accelerationY
-
 
 	
 
@@ -405,7 +342,7 @@ def read_from_excel():
 if __name__=="__main__":
 
 	############## CALCULATION ########################
-	'''
+	
 	ped=[]  #list of pedestrian instances
 
 	generate_pedestrians(ped)  #generate some pedestrians initially
@@ -417,39 +354,6 @@ if __name__=="__main__":
 	
 	save_as_excel(positionX,positionY,velocityX,velocityY,accelerationX,accelerationY)
 
-	'''
-
-	############# ANIMATION ############################
-	positionX,positionY,velocityX,velocityY,accelerationX,accelerationY=read_from_excel()
-
-	fig=plt.figure(figsize=(10,5)) #sets the size of the figure of the plot
-	plt.suptitle("Animation graphs") #set title for graph
-
-	ax1=fig.add_subplot(1,2,1) #we create a 1 x 2 subplot and assigning ax1 to the first subplot
-	ax1.set_title("Heat map animation") #sets title to the subplot
-	ax1.set_xlim(0,x_dim*mf) #set the x scale of the heat map (first subplot)
-	ax1.set_ylim(0,y_dim*mf) #set the y scale of the heat map (first subplot)
-	ax1.get_xaxis().set_visible(False) #removes the scale display of the heat map
-	ax1.get_yaxis().set_visible(False) #removes the scale display of the heat map
-	for row in walls.itertuples(): #for loop to iterate through the dataframe containing the wall coordinates
-		ax1.plot([row[1]*mf,row[3]*mf],[row[2]*mf,row[4]*mf])  #this will plot a line using the x and y coordinates of the wall entered in the excel
-
-	cri=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf))) #creates a numpy array for each cell of the heat map, and element value 0
-	#This statement now creates a heat map corresponding to the pedestrian_map
-	#Here, hot varies from black to red to white. So, we want black if the pedestrian cri is max and white if it is minimum
-	im=ax1.imshow(cri,cmap='hot', interpolation='nearest',vmin=-(max_cri),vmax=0) #we are using negative value for cri since maximum is white and minimum is black when cmap is set to hot
 	
 
-	ax2=fig.add_subplot(1,2,2) #we create a 1 x 2 subplot and assigning ax2 to the second subplot
-	ax2.set_title("Pedestrian locus animation") #sets title to the subplot
-	ax2.set_xlim(0,x_dim)
-	ax2.set_ylim(0,y_dim)
-	for row in walls.itertuples(): #for loop to iterate through the dataframe containing the wall coordinates
-		ax2.plot([row[1],row[3]],[row[2],row[4]]) #this will plot a line using the x and y coordinates of the wall entered in the excel
-	scat=ax2.scatter([0],[0],s=50,lw=0,facecolor='0.5')	
-
-	anim=animation.FuncAnimation(fig,update_heat_map,fargs=(ax1,im),frames=400,interval=500)
-	anim2=animation.FuncAnimation(fig,update_scatter_plot,fargs=(ax2,scat),frames=400,interval=500)
-
-	fig.show() #displays the plot
 
