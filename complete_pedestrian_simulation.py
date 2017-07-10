@@ -17,14 +17,16 @@ t_total=20     #total running time (in seconds)
 loops=int(t_total/t_int) #calculates the number of loops to be performed
 
 n_ped=50   #number of pedestrians
-m_ped=1    #mass of one pedestrian
-r_p=0.3   #radius of one pedestrain (in meters)
+m_ped=1     #mass of one pedestrian
+r_p=0.3     #radius of one pedestrain (in meters)
 v_desired_max=1.4 #desired speed of the pedestrian (in m/s)
+
 border_threshold=5 #distance beyond which walls dont influence (in meters)
+ped_threshold=3 #distance beyond which pedestrians dont influence (in meters)
 
 
 points=pd.ExcelFile("points.xlsx") #a dataframe loaded from the excel file containing the points 
-walls=pd.ExcelFile("walls.xlsx").parse("Map1")  #a dataframe loaded from the excel file containing the coordinates of the wall
+walls=pd.ExcelFile("walls.xlsx").parse("Map1").as_matrix()  #a dataframe loaded from the excel file containing the coordinates of the wall
 rooms=4 #number of rooms in the map
 
 
@@ -127,6 +129,9 @@ class Pedestrian:
 		self.start=False
 		self.starting_frame=random.randint(0,loops/2)
 
+		self.b_net=0
+		self.p_net=0
+
 		self.t_relax=random.uniform(0.9,1.1)
 		self.rad=random.uniform(0.5,0.6)
 
@@ -176,6 +181,8 @@ def border_repulsion(p):
 	#a_b=1
 	#b_b=0.3
 
+	#return 0.0,0.0
+
 	f_x=0
 	f_y=0
 
@@ -201,7 +208,9 @@ def border_repulsion(p):
 			if (t_x-row[1])*(t_x-row[3]) <= 0 and (t_y-row[2])*(t_y-row[4]) <= 0: #the foot must lie on the wall
 				f_x+=p.a_b*math.exp((p.rad-dist)/p.b_b)*u_x
 				f_y+=p.a_b*math.exp((p.rad-dist)/p.b_b)*u_y
-	
+
+				p.b_net+=math.sqrt(f_x**2 + f_y**2)
+
 	return f_x,f_y				
 
 def pedestrian_repulsion(ped,p):
@@ -216,6 +225,8 @@ def pedestrian_repulsion(ped,p):
 	#a2=0.5
 	#b2=0.2
 	
+	#return 0.0,0.0
+
 	r=0.6
 	lam=0.75
 
@@ -223,13 +234,13 @@ def pedestrian_repulsion(ped,p):
 	f_y=0 # net force in the y direction
 
 
-	for i in xrange(n_ped): #iterates through all the pedestrians from the list 
-		dist=math.sqrt((ped[i].x-p.x)**2+(ped[i].y-p.y)**2) #distance of the i th pedestrian from pedestrian p 
+	for i in xrange(n_ped): #iterates through all the pedestrians from the list
+		if ped[i].start==True and ped[i].end==False: 
+			
+			dist=math.sqrt((ped[i].x-p.x)**2+(ped[i].y-p.y)**2) #distance of the i th pedestrian from pedestrian p 
 		
-		if dist==0: #distance is zero indicates that i th pedestrian is p 
-			continue #since the pedestrian does not exert any force on themselves
-		else:
-			if ped[i].start==True and ped[i].end==False:
+			if dist!=0 and dist<ped_threshold: #distance is zero indicates that i th pedestrian is p, and a pedestrian does not exert force on themselves
+			
 				nx=(p.x-ped[i].x)/dist  #x component of unit vector between the two pedestrians
 				ny=(p.y-ped[i].y)/dist  #y component of unit vector between the two pedestrians
 				cos=abs(p.x*nx+p.y*ny)  # cos of angle between the line joining two pedestrian, and the path of p
@@ -238,8 +249,10 @@ def pedestrian_repulsion(ped,p):
 				f_x+=p.a1*math.exp((r-dist)/p.b1)*nx*(lam+(1-lam)*(1+cos)/2)+p.a2*math.exp((r-dist)/p.b2)*nx
 				#y component of force on p due to the i th pedestrian 
 				f_y+=p.a1*math.exp((r-dist)/p.b1)*ny*(lam+(1-lam)*(1+cos)/2)+p.a2*math.exp((r-dist)/p.b2)*ny
-			
-	
+
+				p.p_net+=math.sqrt(f_x**2 + f_y**2)
+
+		
 	return f_x,f_y
 
 def sfm(ped,frame):
@@ -253,6 +266,7 @@ def sfm(ped,frame):
 		#this statement calls the three force functions, and obtains the net force of each pedestrian in the x and y directions
 		#It then updates the positions and velocities of the pedestrians using kinematic equations
 		
+
 		if ped[i].start==True and ped[i].end==False:
 			ped[i].calc_desired_velocity()
 			f_total=[sum(x) for x in zip( driving_force(ped[i]) , border_repulsion(ped[i]) , pedestrian_repulsion(ped,ped[i]))]
@@ -290,6 +304,8 @@ def create_dataframe():
 	velocityY_col=[]  #column names for the pandas dataframe containing pedestrian y velocities
 	accelerationX_col=[]  #column names for the pandas dataframe containing pedestrian x accelerations
 	accelerationY_col=[]  #column names for the pandas dataframe containing pedestrian y accelerations
+	border_net_col=[]
+	ped_net_col=[]
 
 	for i in xrange(n_ped): #iterates for n_ped number of times 
 		positionX_col.append("Pedestrian "+str(i+1)) #adds the column label for x position
@@ -298,6 +314,8 @@ def create_dataframe():
 		velocityY_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
 		accelerationX_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
 		accelerationY_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
+		border_net_col.append("Pedestrian "+str(i+1))
+		ped_net_col.append("Pedestrian "+str(i+1))
 		
 
 	positionX=pd.DataFrame(columns=positionX_col) #contructs empty dataframe with the required columns 
@@ -306,21 +324,27 @@ def create_dataframe():
 	velocityY=pd.DataFrame(columns=velocityY_col) #contructs empty dataframe with the required columns
 	accelerationX=pd.DataFrame(columns=accelerationX_col) #contructs empty dataframe with the required columns
 	accelerationY=pd.DataFrame(columns=accelerationY_col) #contructs empty dataframe with the required columns
+	border_net=pd.DataFrame(columns=border_net_col)
+	ped_net=pd.DataFrame(columns=ped_net_col)
 
-	return positionX,positionY,velocityX,velocityY,accelerationX,accelerationY
+	return positionX,positionY,velocityX,velocityY,accelerationX,accelerationY,border_net,ped_net
 
-def add_dataframe(positionX,positionY,velocityX,velocityY,accelerationX,accelerationY):
+def add_dataframe(ped):
 
-	positionX.loc[i]=[a.x for a in ped] #adds the x position of all the pedestrians to the data frame
-	positionY.loc[i]=[a.y for a in ped] #adds the y position of all the pedestrians to the data frame
-	velocityX.loc[i]=[a.vx for a in ped] #adds the x velocity of all the pedestrians to the data frame
-	velocityY.loc[i]=[a.vy for a in ped] #adds the y velocity of all the pedestrians to the data frame
-	accelerationX.loc[i]=[a.ax for a in ped] #adds the x acceleration of all the pedestrians to the data frame
-	accelerationY.loc[i]=[a.ay for a in ped] #adds the y acceleration of all the pedestrians to the data frame
+	positionX.loc[frame]=[a.x for a in ped] #adds the x position of all the pedestrians to the data frame
+	positionY.loc[frame]=[a.y for a in ped] #adds the y position of all the pedestrians to the data frame
+	velocityX.loc[frame]=[a.vx for a in ped] #adds the x velocity of all the pedestrians to the data frame
+	velocityY.loc[frame]=[a.vy for a in ped] #adds the y velocity of all the pedestrians to the data frame
+	accelerationX.loc[frame]=[a.ax for a in ped] #adds the x acceleration of all the pedestrians to the data frame
+	accelerationY.loc[frame]=[a.ay for a in ped] #adds the y acceleration of all the pedestrians to the data frame
+	border_net.loc[frame]=[a.b_net for a in ped]
+	ped_net.loc[frame]=[a.p_net for a in ped]
+	for a in ped:
+		a.p_net=a.b_net=0
 	
 
 
-def save_as_excel(positionX,positionY,velocityX,velocityY,accelerationX,accelerationY):
+def save_as_excel():
 	"""
 	This method saves the pandas dataframe into excel.
 	"""
@@ -332,6 +356,8 @@ def save_as_excel(positionX,positionY,velocityX,velocityY,accelerationX,accelera
 	velocityY.to_excel(writer,sheet_name="Y velocity") #writes the dataframe into the excel file in the given sheet
 	accelerationX.to_excel(writer,sheet_name="X acceleration") #writes the dataframe into the excel file in the given sheet
 	accelerationY.to_excel(writer,sheet_name="Y acceleration") #writes the dataframe into the excel file in the given sheet
+	border_net.to_excel(writer,sheet_name="border force")
+	ped_net.to_excel(writer,sheet_name="pedestrian force")
 
 	writer.save() #saves the excel file in the same diretory as this script
 
@@ -346,14 +372,10 @@ if __name__=="__main__":
 	ped=[]  #list of pedestrian instances
 
 	generate_pedestrians(ped)  #generate some pedestrians initially
-	positionX,positionY,velocityX,velocityY,accelerationX,accelerationY=create_dataframe() #create dataframes in which the pedestrian data at each instance is stored
-
-	for i in xrange (loops): #iterates through the loops
-		sfm(ped,i) #updates the pedestrian positions and velocity by calculating the forces 
-		add_dataframe(positionX,positionY,velocityX,velocityY,accelerationX,accelerationY)
+	positionX,positionY,velocityX,velocityY,accelerationX,accelerationY,border_net,ped_net=create_dataframe() #create dataframes in which the pedestrian data at each instance is stored
 	
-	save_as_excel(positionX,positionY,velocityX,velocityY,accelerationX,accelerationY)
-
+	for frame in xrange (loops): #iterates through the loops
+		sfm(ped,frame) #updates the pedestrian positions and velocity by calculating the forces 
+		add_dataframe(ped)
 	
-
-
+	save_as_excel()
