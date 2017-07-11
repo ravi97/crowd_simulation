@@ -12,7 +12,7 @@ import random
 
 """ GLOBAL VARIABLES"""
 
-t_int=0.05     #interval time (in seconds)
+t_int=0.1     #interval time (in seconds)
 t_total=20     #total running time (in seconds)
 loops=int(t_total/t_int) #calculates the number of loops to be performed
 
@@ -27,7 +27,7 @@ ped_threshold=3 #distance beyond which pedestrians dont influence (in meters)
 
 points=pd.ExcelFile("points.xlsx") #a dataframe loaded from the excel file containing the points 
 walls=pd.ExcelFile("walls.xlsx").parse("Map1")  #a dataframe loaded from the excel file containing the coordinates of the wall
-walls_m=walls.as_matrix()
+walls_m=walls.as_matrix() #load the dataframe into a numpy array for faster computation
 rooms=4 #number of rooms in the map
 
 
@@ -44,32 +44,32 @@ class Pedestrian:
 		This is a constructor method.
 		It is called when a new object is created
 		"""
-		self.set_path()
+		self.set_path() #decides the path the pedestrians should take
 		self.vx=0    #x velocity
 		self.vy=0    #y velocity
 		self.ax=0    #x acceleration
 		self.ay=0    #y acceleration
 
 		self.init_constants() #invokes the function init_constants 
+		self.set_initial_conditions() #function to set initial conditions of the pedestrian
 		self.side=self.calc_side() #invokes the function calc side and assign it to the variable side
-		self.calc_desired_velocity() #invokes the function to calculate desired velocity
-		
+				
 		
 	def set_path(self):
-		room=random.randint(1,rooms)
-		if room==1:
-			self.x=random.uniform(2,12)
+		self.room=random.randint(1,rooms) #randomly chooses a room in which the pedestrian starts
+		if self.room==1:
+			self.x=random.uniform(2,12) 
 			self.y=random.uniform(15,25)
-			self.path=points.parse("Path1").as_matrix()
+			self.path=points.parse("Path1").as_matrix()  #chooses the first path for 
 			self.checkpoints=self.path.shape[0]   #number of points the pedestrian have to cross
 
-		elif room==2:
+		elif self.room==2:
 			self.x=random.uniform(25,35)
 			self.y=random.uniform(30,40)
 			self.path=points.parse("Path2").as_matrix()
 			self.checkpoints=self.path.shape[0]   #number of points the pedestrian have to cross
 
-		elif room==3:
+		elif self.room==3:
 			self.x=random.uniform(25,35)
 			self.y=random.uniform(15,25)
 			self.path=points.parse("Path3").as_matrix()
@@ -123,23 +123,17 @@ class Pedestrian:
 		self.vdy=self.vd_net*u_y		
 
 	def init_constants(self):
-		self.point=0
-		self.end=False
-		self.start=False
+		
 		self.starting_frame=random.randint(0,loops/2)
 
-		self.b_net=0
-		self.p_net=0
-
-
 		self.category=random.randint(1,4)
-		if catogory==1:
+		if self.category==1:
 			self.vd_net=random.uniform(1,1.1)
-		elif category==2:
+		elif self.category==2:
 			self.vd_net=random.uniform(1.1,1.2)
-		elif category==3:
+		elif self.category==3:
 			self.vd_net=random.uniform(1.2,1.3)
-		elif catogory==4:
+		elif self.category==4:
 			self.vd_net=random.uniform(1.3,1.4)
 
 		self.t_relax=random.uniform(0.9,1.1)
@@ -152,6 +146,15 @@ class Pedestrian:
 		self.b1=random.uniform(0.18,0.22)
 		self.a2=random.uniform(0.045,0.055)
 		self.b2=random.uniform(0.18,0.22)
+
+	def set_initial_conditions(self):
+		self.point=0
+		self.end=False
+		self.start=False
+
+		self.b_net=0
+		self.p_net=0
+
 
 	def calc_side(self):
 		x1=self.path[self.point][0]
@@ -305,6 +308,42 @@ def generate_pedestrians(ped):
 		#the list is appended with instances of the pedestrian class initialised using a constructor 
 		ped.append(Pedestrian())
 
+def save_property_matrix(ped):
+
+	columns=[]
+	for i in xrange(n_ped):
+		columns.append("pedestrian "+str(i+1))
+
+	indices=[]
+	indices.append("Desired velocity")
+	indices.append("Starting frame")
+	indices.append("Category")
+	indices.append("Room")
+	indices.append("t relax")
+	indices.append("radius")
+	indices.append("a_b")
+	indices.append("b_b")
+	indices.append("a1")
+	indices.append("a2")
+	indices.append("b1")
+	indices.append("b2")
+
+	property_list=[]
+	property_list.append([a.vd_net for a in ped])
+	property_list.append([a.starting_frame for a in ped])
+	property_list.append([a.category for a in ped])
+	property_list.append([a.room for a in ped])
+	property_list.append([a.t_relax for a in ped])
+	property_list.append([a.rad for a in ped])
+	property_list.append([a.a_b for a in ped])
+	property_list.append([a.b_b for a in ped])
+	property_list.append([a.a1 for a in ped])
+	property_list.append([a.a2 for a in ped])
+	property_list.append([a.b1 for a in ped])
+	property_list.append([a.b2 for a in ped])
+
+	property_matrix=pd.DataFrame(property_list,columns=columns,index=indices)
+	property_matrix.to_excel("Pedestrian_properties.xlsx",sheet_name="Sheet1")
 
 def add_dataframe(ped):
 
@@ -363,6 +402,8 @@ if __name__=="__main__":
 	ped=[]  #list of pedestrian instances
 
 	generate_pedestrians(ped)  #generate some pedestrians initially
+	save_property_matrix(ped)
+
 	positionX=[]
 	positionY=[]
 	velocityX=[]
