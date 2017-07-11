@@ -16,7 +16,7 @@ t_int=0.05     #interval time (in seconds)
 t_total=20     #total running time (in seconds)
 loops=int(t_total/t_int) #calculates the number of loops to be performed
 
-n_ped=50   #number of pedestrians
+n_ped=200   #number of pedestrians
 m_ped=1     #mass of one pedestrian
 r_p=0.3     #radius of one pedestrain (in meters)
 v_desired_max=1.4 #desired speed of the pedestrian (in m/s)
@@ -26,7 +26,8 @@ ped_threshold=3 #distance beyond which pedestrians dont influence (in meters)
 
 
 points=pd.ExcelFile("points.xlsx") #a dataframe loaded from the excel file containing the points 
-walls=pd.ExcelFile("walls.xlsx").parse("Map1").as_matrix()  #a dataframe loaded from the excel file containing the coordinates of the wall
+walls=pd.ExcelFile("walls.xlsx").parse("Map1")  #a dataframe loaded from the excel file containing the coordinates of the wall
+walls_m=walls.as_matrix()
 rooms=4 #number of rooms in the map
 
 
@@ -59,26 +60,26 @@ class Pedestrian:
 		if room==1:
 			self.x=random.uniform(2,12)
 			self.y=random.uniform(15,25)
-			self.path=points.parse("Path1")
-			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+			self.path=points.parse("Path1").as_matrix()
+			self.checkpoints=self.path.shape[0]   #number of points the pedestrian have to cross
 
 		elif room==2:
 			self.x=random.uniform(25,35)
 			self.y=random.uniform(30,40)
-			self.path=points.parse("Path2")
-			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+			self.path=points.parse("Path2").as_matrix()
+			self.checkpoints=self.path.shape[0]   #number of points the pedestrian have to cross
 
 		elif room==3:
 			self.x=random.uniform(25,35)
 			self.y=random.uniform(15,25)
-			self.path=points.parse("Path3")
-			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+			self.path=points.parse("Path3").as_matrix()
+			self.checkpoints=self.path.shape[0]   #number of points the pedestrian have to cross
 
 		else:
 			self.x=random.uniform(40,50)
 			self.y=random.uniform(5,15)
-			self.path=points.parse("Path4")
-			self.checkpoints=len(self.path.index)   #number of points the pedestrian have to cross
+			self.path=points.parse("Path4").as_matrix()
+			self.checkpoints=self.path.shape[0]   #number of points the pedestrian have to cross
 
 
 
@@ -94,10 +95,10 @@ class Pedestrian:
 				self.side=self.calc_side()
 			else:
 				self.end=True
-		x1=self.path.loc[self.point][0]
-		y1=self.path.loc[self.point][1]
-		x2=self.path.loc[self.point][2]
-		y2=self.path.loc[self.point][3]
+		x1=self.path[self.point][0]
+		y1=self.path[self.point][1]
+		x2=self.path[self.point][2]
+		y2=self.path[self.point][3]
 
 		A=y1-y2
 		B=x2-x1
@@ -122,8 +123,6 @@ class Pedestrian:
 		self.vdy=self.vd_net*u_y		
 
 	def init_constants(self):
-		self.vd_net=random.uniform(1,1.4)
-
 		self.point=0
 		self.end=False
 		self.start=False
@@ -131,6 +130,17 @@ class Pedestrian:
 
 		self.b_net=0
 		self.p_net=0
+
+
+		self.category=random.randint(1,4)
+		if catogory==1:
+			self.vd_net=random.uniform(1,1.1)
+		elif category==2:
+			self.vd_net=random.uniform(1.1,1.2)
+		elif category==3:
+			self.vd_net=random.uniform(1.2,1.3)
+		elif catogory==4:
+			self.vd_net=random.uniform(1.3,1.4)
 
 		self.t_relax=random.uniform(0.9,1.1)
 		self.rad=random.uniform(0.5,0.6)
@@ -144,10 +154,10 @@ class Pedestrian:
 		self.b2=random.uniform(0.18,0.22)
 
 	def calc_side(self):
-		x1=self.path.loc[self.point][0]
-		x2=self.path.loc[self.point][2]
-		y1=self.path.loc[self.point][1]
-		y2=self.path.loc[self.point][3]
+		x1=self.path[self.point][0]
+		x2=self.path[self.point][2]
+		y1=self.path[self.point][1]
+		y2=self.path[self.point][3]
 		return (y1-y2)*(self.x-x1)+(self.y-y1)*(x2-x1)
 
 
@@ -187,10 +197,10 @@ def border_repulsion(p):
 	f_y=0
 
 
-	for row in walls.itertuples():
-		A=row[2]-row[4]                #we are finding the perpendicular distance between the wall and the pedestrian
-		B=row[3]-row[1]                #we know (x1,y1) and (x2,y2) for the line. We are converting it into Ax + By + C = 0 format
-		C=row[1]*row[4]-row[3]*row[2]  # A= y1 - y2 , B = x2 - x1 , C = x1*y2 - x2*y1
+	for i in range(walls_m.shape[0]):
+		A=walls_m[i][1]-walls_m[i][3]                #we are finding the perpendicular distance between the wall and the pedestrian
+		B=walls_m[i][2]-walls_m[i][0]                #we know (x1,y1) and (x2,y2) for the line. We are converting it into Ax + By + C = 0 format
+		C=walls_m[i][0]*walls_m[i][3]-walls_m[i][2]*walls_m[i][1]  # A= y1 - y2 , B = x2 - x1 , C = x1*y2 - x2*y1
 
 		m=p.x  #pedestrian coordinates
 		n=p.y
@@ -205,7 +215,7 @@ def border_repulsion(p):
 		u_y=(n - t_y)/dist   #y component of unit vector from the pedestrian to the perpendicular of the wall
 
 		if dist<border_threshold: #walls outside this threshold wont influence
-			if (t_x-row[1])*(t_x-row[3]) <= 0 and (t_y-row[2])*(t_y-row[4]) <= 0: #the foot must lie on the wall
+			if (t_x-walls_m[i][0])*(t_x-walls_m[i][2]) <= 0 and (t_y-walls_m[i][1])*(t_y-walls_m[i][3]) <= 0: #the foot must lie on the wall
 				f_x+=p.a_b*math.exp((p.rad-dist)/p.b_b)*u_x
 				f_y+=p.a_b*math.exp((p.rad-dist)/p.b_b)*u_y
 
@@ -296,49 +306,17 @@ def generate_pedestrians(ped):
 		ped.append(Pedestrian())
 
 
-def create_dataframe():
-	
-	positionX_col=[]  #column names for the pandas dataframe containing pedestrian x positions
-	positionY_col=[]  #column names for the pandas dataframe containing pedestrian y positions
-	velocityX_col=[]  #column names for the pandas dataframe containing pedestrian x velocities  
-	velocityY_col=[]  #column names for the pandas dataframe containing pedestrian y velocities
-	accelerationX_col=[]  #column names for the pandas dataframe containing pedestrian x accelerations
-	accelerationY_col=[]  #column names for the pandas dataframe containing pedestrian y accelerations
-	border_net_col=[]
-	ped_net_col=[]
-
-	for i in xrange(n_ped): #iterates for n_ped number of times 
-		positionX_col.append("Pedestrian "+str(i+1)) #adds the column label for x position
-		positionY_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
-		velocityX_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
-		velocityY_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
-		accelerationX_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
-		accelerationY_col.append("Pedestrian "+str(i+1)) #adds the column label for y position
-		border_net_col.append("Pedestrian "+str(i+1))
-		ped_net_col.append("Pedestrian "+str(i+1))
-		
-
-	positionX=pd.DataFrame(columns=positionX_col) #contructs empty dataframe with the required columns 
-	positionY=pd.DataFrame(columns=positionY_col) #contructs empty dataframe with the required columns
-	velocityX=pd.DataFrame(columns=velocityX_col) #contructs empty dataframe with the required columns
-	velocityY=pd.DataFrame(columns=velocityY_col) #contructs empty dataframe with the required columns
-	accelerationX=pd.DataFrame(columns=accelerationX_col) #contructs empty dataframe with the required columns
-	accelerationY=pd.DataFrame(columns=accelerationY_col) #contructs empty dataframe with the required columns
-	border_net=pd.DataFrame(columns=border_net_col)
-	ped_net=pd.DataFrame(columns=ped_net_col)
-
-	return positionX,positionY,velocityX,velocityY,accelerationX,accelerationY,border_net,ped_net
-
 def add_dataframe(ped):
 
-	positionX.loc[frame]=[a.x for a in ped] #adds the x position of all the pedestrians to the data frame
-	positionY.loc[frame]=[a.y for a in ped] #adds the y position of all the pedestrians to the data frame
-	velocityX.loc[frame]=[a.vx for a in ped] #adds the x velocity of all the pedestrians to the data frame
-	velocityY.loc[frame]=[a.vy for a in ped] #adds the y velocity of all the pedestrians to the data frame
-	accelerationX.loc[frame]=[a.ax for a in ped] #adds the x acceleration of all the pedestrians to the data frame
-	accelerationY.loc[frame]=[a.ay for a in ped] #adds the y acceleration of all the pedestrians to the data frame
-	border_net.loc[frame]=[a.b_net for a in ped]
-	ped_net.loc[frame]=[a.p_net for a in ped]
+	positionX.append([a.x for a in ped]) #adds the x position of all the pedestrians to the data frame
+	positionY.append([a.y for a in ped]) #adds the y position of all the pedestrians to the data frame
+	velocityX.append([a.vx for a in ped]) #adds the x velocity of all the pedestrians to the data frame
+	velocityY.append([a.vy for a in ped]) #adds the y velocity of all the pedestrians to the data frame
+	accelerationX.append([a.ax for a in ped]) #adds the x acceleration of all the pedestrians to the data frame
+	accelerationY.append([a.ay for a in ped]) #adds the y acceleration of all the pedestrians to the data frame
+	border_net.append([a.b_net for a in ped])
+	ped_net.append([a.p_net for a in ped])
+	
 	for a in ped:
 		a.p_net=a.b_net=0
 	
@@ -348,16 +326,29 @@ def save_as_excel():
 	"""
 	This method saves the pandas dataframe into excel.
 	"""
+	columns=[]
+	for i in xrange(n_ped):
+		columns.append("pedestrian "+str(i+1))
+
+	px=pd.DataFrame(np.array(positionX),columns=columns)
+	py=pd.DataFrame(np.array(positionY),columns=columns)
+	vx=pd.DataFrame(np.array(velocityX),columns=columns)
+	vy=pd.DataFrame(np.array(velocityY),columns=columns)
+	ax=pd.DataFrame(np.array(accelerationX),columns=columns)
+	ay=pd.DataFrame(np.array(accelerationY),columns=columns)
+	b_net=pd.DataFrame(np.array(border_net),columns=columns)
+	p_net=pd.DataFrame(np.array(ped_net),columns=columns)
+
 	writer=pd.ExcelWriter("Pedestrian_details.xlsx") #creates an excel writes
 
-	positionX.to_excel(writer,sheet_name="X positions") #writes the dataframe into the excel file in the given sheet
-	positionY.to_excel(writer,sheet_name="Y positions") #writes the dataframe into the excel file in the given sheet
-	velocityX.to_excel(writer,sheet_name="X velocity") #writes the dataframe into the excel file in the given sheet
-	velocityY.to_excel(writer,sheet_name="Y velocity") #writes the dataframe into the excel file in the given sheet
-	accelerationX.to_excel(writer,sheet_name="X acceleration") #writes the dataframe into the excel file in the given sheet
-	accelerationY.to_excel(writer,sheet_name="Y acceleration") #writes the dataframe into the excel file in the given sheet
-	border_net.to_excel(writer,sheet_name="border force")
-	ped_net.to_excel(writer,sheet_name="pedestrian force")
+	px.to_excel(writer,sheet_name="X positions") #writes the dataframe into the excel file in the given sheet
+	py.to_excel(writer,sheet_name="Y positions") #writes the dataframe into the excel file in the given sheet
+	vx.to_excel(writer,sheet_name="X velocity") #writes the dataframe into the excel file in the given sheet
+	vy.to_excel(writer,sheet_name="Y velocity") #writes the dataframe into the excel file in the given sheet
+	ax.to_excel(writer,sheet_name="X acceleration") #writes the dataframe into the excel file in the given sheet
+	ay.to_excel(writer,sheet_name="Y acceleration") #writes the dataframe into the excel file in the given sheet
+	b_net.to_excel(writer,sheet_name="border force")
+	p_net.to_excel(writer,sheet_name="pedestrian force")
 
 	writer.save() #saves the excel file in the same diretory as this script
 
@@ -372,7 +363,14 @@ if __name__=="__main__":
 	ped=[]  #list of pedestrian instances
 
 	generate_pedestrians(ped)  #generate some pedestrians initially
-	positionX,positionY,velocityX,velocityY,accelerationX,accelerationY,border_net,ped_net=create_dataframe() #create dataframes in which the pedestrian data at each instance is stored
+	positionX=[]
+	positionY=[]
+	velocityX=[]
+	velocityY=[]
+	accelerationX=[]
+	accelerationY=[]
+	border_net=[]
+	ped_net=[]
 	
 	for frame in xrange (loops): #iterates through the loops
 		sfm(ped,frame) #updates the pedestrian positions and velocity by calculating the forces 

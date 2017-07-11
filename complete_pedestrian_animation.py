@@ -17,27 +17,27 @@ mf=1/float(grid_size) #multiplication factor since the number of grids in the he
 """The weightage of various factors on the Crowd risk Index (CRI)"""
 imp_weight=2 #impatience factor
 density_weight=1 #pedestrian density factor
-b_weight=5
-p_weight=5
+b_weight=0
+p_weight=0
 
 """The threshold values of various factors influencing CRI, beyond which, it is dangerous"""
 imp_threshold=1     
-density_threshold=5
-b_threshold=1
-p_threshold=1
+density_threshold=3
+b_threshold=0
+p_threshold=0
 
 max_cri=imp_threshold*imp_weight+density_threshold*density_weight \
         + b_threshold*b_weight + p_threshold*p_weight        #The maximum value the CRI can have without danger
 
 
-x=pd.ExcelFile("Pedestrian_details.xlsx").parse("X positions")
-y=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y positions")
-vx=pd.ExcelFile("Pedestrian_details.xlsx").parse("X velocity")
-vy=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y velocity")
-ax=pd.ExcelFile("Pedestrian_details.xlsx").parse("X acceleration")
-ay=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y acceleration")
-b_net=pd.ExcelFile("Pedestrian_details.xlsx").parse("border force")
-p_net=pd.ExcelFile("Pedestrian_details.xlsx").parse("pedestrian force")
+x=pd.ExcelFile("Pedestrian_details.xlsx").parse("X positions").as_matrix()
+y=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y positions").as_matrix()
+vx=pd.ExcelFile("Pedestrian_details.xlsx").parse("X velocity").as_matrix()
+vy=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y velocity").as_matrix()
+ax=pd.ExcelFile("Pedestrian_details.xlsx").parse("X acceleration").as_matrix()
+ay=pd.ExcelFile("Pedestrian_details.xlsx").parse("Y acceleration").as_matrix()
+b_net=pd.ExcelFile("Pedestrian_details.xlsx").parse("border force").as_matrix()
+p_net=pd.ExcelFile("Pedestrian_details.xlsx").parse("pedestrian force").as_matrix()
 
 ### FUNCTIONS USED ###
 
@@ -46,8 +46,8 @@ def update_scatter(i,ax1,scat):
 	ax1.set_title("Pedestrian path : "+str(i))
 	ped_xy=[]
 	for j in xrange(n_ped):
-		if vx.loc[i][j]!=0 and vy.loc[i][j]!=0:
-			ped_xy.append([x.loc[i][j],y.loc[i][j]])
+		if vx[i][j]!=0 and vy[i][j]!=0:
+			ped_xy.append([x[i][j],y[i][j]])
 
 	scat.set_offsets(ped_xy)
 	return scat,
@@ -63,14 +63,14 @@ def update_heat(i,ax2,im):
 	ped_forces=np.zeros(shape=(int(y_dim*mf),int(x_dim*mf)))
 	
 	for j in xrange(n_ped):
-		if vx.loc[i][j]!=0 and vy.loc[i][j]!=0:
-			density[int(math.floor(y.loc[i][j]))][int(math.floor(x.loc[i][j]))]-=1
+		if vx[i][j]!=0 and vy[i][j]!=0:
+			density[int(math.floor(y[i][j]))][int(math.floor(x[i][j]))]-=1
 			
-			imp=1-(math.sqrt(vx.loc[i][j]**2 + vy.loc[i][j]**2))/v_desired_max
-			impatience[int(math.floor(y.loc[i][j]*mf))][int(math.floor(x.loc[i][j]*mf))]-=imp
+			imp=1-(math.sqrt(vx[i][j]**2 + vy[i][j]**2))/v_desired_max
+			impatience[int(math.floor(y[i][j]*mf))][int(math.floor(x[i][j]*mf))]-=imp
 
-			border_forces[int(math.floor(y.loc[i][j]))][int(math.floor(x.loc[i][j]))]-=b_net.loc[i][j]
-			ped_forces[int(math.floor(y.loc[i][j]))][int(math.floor(x.loc[i][j]))]-=p_net.loc[i][j]
+			border_forces[int(math.floor(y[i][j]))][int(math.floor(x[i][j]))]-=b_net[i][j]
+			ped_forces[int(math.floor(y[i][j]))][int(math.floor(x[i][j]))]-=p_net[i][j]
 
 
 	cri=density_weight*density + imp_weight*impatience + b_weight*border_forces + p_weight * ped_forces
@@ -112,6 +112,6 @@ if __name__ == '__main__':
 
 
 	### RUN ANIMATION ###
-	anim=animation.FuncAnimation(fig,update_scatter,fargs=(ax1,scat),frames=loops,interval=50)
-	anim2=animation.FuncAnimation(fig,update_heat,fargs=(ax2,im),frames=loops,interval=50)
+	anim=animation.FuncAnimation(fig,update_scatter,fargs=(ax1,scat),frames=loops,interval=int(t_int*1000))
+	anim2=animation.FuncAnimation(fig,update_heat,fargs=(ax2,im),frames=loops,interval=int(t_int*1000))
 	plt.show()
